@@ -80,11 +80,18 @@ def load_model_nn(alpha=5e-5):  # `cnn` up to now
                 tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_conv)
             )
             tf.summary.scalar('loss_function', loss)
+        with tf.name_scope('learing_rate'):
+            optimizer = tf.train.AdamOptimizer(alpha).minimize(loss)
 
-        optimizer = tf.train.AdamOptimizer(alpha).minimize(loss)
+        with tf.name_scope('accuracy'):
+            with tf.name_scope('correct_prediction'):
+                correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y, 1))
+            with tf.name_scope('accuracy'):
+                accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        tf.summary.scalar('accuracy', accuracy)
 
-        correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y, 1))
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        merged = tf.summary.merge_all()
+
         prediction = tf.argmax(y_conv, 1)  # for recognise
         saver = tf.train.Saver(max_to_keep=1)
         model = {'x': x,
@@ -94,6 +101,7 @@ def load_model_nn(alpha=5e-5):  # `cnn` up to now
                  'keep_prob': keep_prob,
                  'accuracy': accuracy,
                  'prediction': prediction,
+                 'merged':merged,
                  'saver': saver,
                  'graph': graph
                  }

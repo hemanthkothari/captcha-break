@@ -28,7 +28,9 @@ except NameError:
     FileNotFoundError = IOError
 
 formatted_dataset_path = os.path.join(trainer_dir, 'formatted_dataset.pickle')
-graph_log_dir = os.path.join(trainer_dir, 'logs')
+ckpt_dir = os.path.join(trainer_dir, '.checkpoint')
+#graph_log_dir = os.path.join(trainer_dir, 'logs')
+graph_log_dir = ckpt_dir
 
 def train(alpha=5e-5):
     print("loading %s..." % formatted_dataset_path)
@@ -59,23 +61,23 @@ def train(alpha=5e-5):
     optimizer = model['optimizer']
     accuracy = model['accuracy']
     keep_prob = model['keep_prob']
+    merged = model['merged']
     saver = model['saver']
     graph = model['graph']
 
-    save_dir = os.path.join(trainer_dir, '.checkpoint')
-    print("Model saved path: ", save_dir)
+
+    print("checkpoint saved dir: ", ckpt_dir)
 
     batch_size = 64
 
     def save_model(_step):
         saver.save(
             session,
-            os.path.join(save_dir, 'weibo.cn-model.ckpt'),
+            os.path.join(ckpt_dir, 'weibo.cn-model.ckpt'),
             global_step=_step
         )
 
     with tf.Session(graph=graph) as session:
-        merged = tf.summary.merge_all()
         writer = tf.summary.FileWriter(graph_log_dir, session.graph)
         tf.global_variables_initializer().run()
 
@@ -106,34 +108,40 @@ def train(alpha=5e-5):
             )
             step += 1
             if step % 50 == 0:
-                train_accuracy = session.run(
-                    accuracy,
-                    feed_dict={
-                        x: batch_data,
-                        y: batch_labels,
-                        keep_prob: 1.0
-                    }
-                )
-                test_accuracy = session.run(
-                    accuracy,
+                summary, test_accuracy = session.run(
+                    [merged, accuracy],
                     feed_dict={
                         x: test_dataset,
                         y: test_labels,
                         keep_prob: 1.0
                     }
                 )
-
-                print(("Step %5d, Training accuracy: %4f, Test accuracy: %4f" %
-                       (step, train_accuracy, test_accuracy)))
-
-                if step % 100 == 0:  # save the model every 100 step
-                    save_model(step)
-
+                writer.add_summary(summary, step)
+                print(("Step %4d, Test accuracy: %4f" %
+                       (step, test_accuracy)))
                 if test_accuracy > 0.999 or step-origin_step > 2000:
                     print('you can re-format dataset and give a smaller alpha '
                           'to continue training')
                     save_model(step)
                     break
+
+            else:
+                summary, train_accuracy = session.run(
+                    [merged, accuracy],
+                    feed_dict={
+                        x: batch_data,
+                        y: batch_labels,
+                        keep_prob: 1.0
+                    }
+                )
+                writer.add_summary(summary, step)
+
+
+
+            if step % 100 == 0:  # save the model every 100 step
+                save_model(step)
+
+
 
         print("Test accuracy: %g" %
               session.run(
